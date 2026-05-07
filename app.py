@@ -1,26 +1,26 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="AFL Rotation Elite", layout="wide")
+st.set_page_config(page_title="AFL Rotation Pro", layout="wide")
 
 # --- INITIAL SQUAD SETUP ---
 if 'players' not in st.session_state:
     st.session_state.players = [
-        {"Name": "Joel", "Line": "Back", "Group": 1, "Unit": "A", "Active": True},
-        {"Name": "Eli", "Line": "Back", "Group": 2, "Unit": "A", "Active": True},
-        {"Name": "Jagger", "Line": "Back", "Group": 3, "Unit": "A", "Active": True},
-        {"Name": "Max", "Line": "Back", "Group": 4, "Unit": "A", "Active": True},
-        {"Name": "Josh", "Line": "Back", "Group": 5, "Unit": "A", "Active": True},
-        {"Name": "Carmelo", "Line": "Mid", "Group": 1, "Unit": "B", "Active": True},
-        {"Name": "Buddy", "Line": "Mid", "Group": 2, "Unit": "B", "Active": True},
-        {"Name": "Jaxon F", "Line": "Mid", "Group": 3, "Unit": "B", "Active": True},
-        {"Name": "Harry", "Line": "Mid", "Group": 4, "Unit": "B", "Active": True},
-        {"Name": "Tyler", "Line": "Mid", "Group": 5, "Unit": "B", "Active": True},
-        {"Name": "Michael", "Line": "Forward", "Group": 1, "Unit": "C", "Active": True},
-        {"Name": "Ernest", "Line": "Forward", "Group": 2, "Unit": "C", "Active": True},
-        {"Name": "Leyton", "Line": "Forward", "Group": 3, "Unit": "C", "Active": True},
-        {"Name": "Jaxon J", "Line": "Forward", "Group": 4, "Unit": "C", "Active": True},
-        {"Name": "Xavier", "Line": "Forward", "Group": 5, "Unit": "C", "Active": True},
+        {"Name": "Joel", "Unit": "A", "Group": 1, "Active": True},
+        {"Name": "Eli", "Unit": "A", "Group": 2, "Active": True},
+        {"Name": "Jagger", "Unit": "A", "Group": 3, "Active": True},
+        {"Name": "Max", "Unit": "A", "Group": 4, "Active": True},
+        {"Name": "Josh", "Unit": "A", "Group": 5, "Active": True},
+        {"Name": "Carmelo", "Unit": "B", "Group": 1, "Active": True},
+        {"Name": "Buddy", "Unit": "B", "Group": 2, "Active": True},
+        {"Name": "Jaxon F", "Unit": "B", "Group": 3, "Active": True},
+        {"Name": "Harry", "Unit": "B", "Group": 4, "Active": True},
+        {"Name": "Tyler", "Unit": "B", "Group": 5, "Active": True},
+        {"Name": "Michael", "Unit": "C", "Group": 1, "Active": True},
+        {"Name": "Ernest", "Unit": "C", "Group": 2, "Active": True},
+        {"Name": "Leyton", "Unit": "C", "Group": 3, "Active": True},
+        {"Name": "Jaxon J", "Unit": "C", "Group": 4, "Active": True},
+        {"Name": "Xavier", "Unit": "C", "Group": 5, "Active": True},
     ]
 
 # --- LINE ROTATION SETTINGS ---
@@ -32,74 +32,75 @@ if 'line_plan' not in st.session_state:
         4: {"A": "Back", "B": "Mid", "C": "Forward"}
     }
 
-# --- SIDEBAR: TACTICAL & SQUAD ---
+# --- SIDEBAR: ATTENDANCE & STRATEGY ---
 with st.sidebar:
-    st.header("⚙️ Tactical Strategy")
+    st.header("⚙️ Game Setup")
+    
+    # Select who starts on bench
+    start_grp = st.radio("Who starts on bench?", [1, 2, 3, 4, 5], horizontal=True, index=0)
+    
     with st.expander("🔄 Set Line Rotations"):
         for q in [1, 2, 3, 4]:
             st.write(f"**Quarter {q} Plan**")
-            st.session_state.line_plan[q]["A"] = st.selectbox(f"Unit A Pos", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["A"]), key=f"q{q}a")
-            st.session_state.line_plan[q]["B"] = st.selectbox(f"Unit B Pos", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["B"]), key=f"q{q}b")
-            st.session_state.line_plan[q]["C"] = st.selectbox(f"Unit C Pos", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["C"]), key=f"q{q}c")
+            cols = st.columns(3)
+            st.session_state.line_plan[q]["A"] = cols[0].selectbox(f"A", ["Back", "Mid", "Fwd"], index=0, key=f"q{q}a", label_visibility="collapsed")
+            st.session_state.line_plan[q]["B"] = cols[1].selectbox(f"B", ["Back", "Mid", "Fwd"], index=1, key=f"q{q}b", label_visibility="collapsed")
+            st.session_state.line_plan[q]["C"] = cols[2].selectbox(f"C", ["Back", "Mid", "Fwd"], index=2, key=f"q{q}c", label_visibility="collapsed")
 
-    st.header("📋 Player Names")
+    st.header("📋 Attendance")
     for i, p in enumerate(st.session_state.players):
-        p['Name'] = st.text_input(f"Unit {p['Unit']} - G{p['Group']}", value=p['Name'], key=f"name_{i}")
+        col_n, col_a = st.columns([3, 1])
+        p['Name'] = col_n.text_input(f"Name {i}", value=p['Name'], key=f"n_{i}", label_visibility="collapsed")
+        p['Active'] = col_a.checkbox("In", value=p['Active'], key=f"p_{i}")
 
 # --- MAIN INTERFACE ---
-st.title("🏉 AFL Rotation Elite")
+st.title("🏉 AFL Rotation Pro")
 
-# --- UI CONTROLS ---
-t_col1, t_col2 = st.columns([2, 1])
+# --- MOBILE CONTROLS ---
+q_selected = st.radio("Quarter", [1, 2, 3, 4], horizontal=True)
+phase_toggle = st.radio("Rotation", ["Start (0-7.5m)", "Mid (7.5-15m)"], horizontal=True)
 
-with t_col1:
-    q_selected = st.radio("Current Quarter", [1, 2, 3, 4], horizontal=True)
-    phase_toggle = st.radio("Rotation Segment", ["Start (0-7.5m)", "Mid (7.5-15m)"], horizontal=True)
-    phase = ((q_selected - 1) * 2) + (1 if phase_toggle == "Start (0-7.5m)" else 2)
+# --- LOGIC ENGINE ---
+raw_phase = ((q_selected - 1) * 2) + (1 if phase_toggle == "Start (0-7.5m)" else 2)
+# Apply offset based on the starting group choice
+group_sequence = [1, 2, 3, 4, 5, 1, 2, 3]
+offset = start_grp - 1
+current_off_group = group_sequence[(raw_phase - 1 + offset) % 5]
+next_off_group = group_sequence[(raw_phase + offset) % 5]
 
-with t_col2:
-    st.metric("Rotation Phase", f"P{phase}")
-    current_plan = st.session_state.line_plan[q_selected]
-    st.info(f"Plan: A={current_plan['A']} | B={current_plan['B']} | C={current_plan['C']}")
-
-st.divider()
-
-# Update player lines based on the tactical plan for the selected quarter
+# Update positions based on tactical line plan
 for p in st.session_state.players:
     p['Line'] = st.session_state.line_plan[q_selected][p['Unit']]
 
-# --- ROTATION ENGINE ---
-mapping = {1:1, 2:2, 3:3, 4:4, 5:5, 6:1, 7:2, 8:3}
-next_mapping = {1:2, 2:3, 3:4, 4:5, 5:1, 6:2, 7:3, 8:4}
-
-current_off_group = mapping[phase]
-next_off_group = next_mapping[phase]
-
 df = pd.DataFrame(st.session_state.players)
+df_active = df[df['Active'] == True]
+
+st.divider()
 
 # --- FIELD VIEW ---
-col_field, col_bench = st.columns([3, 1.2])
+col_field, col_bench = st.columns([2.5, 1.5])
 
 with col_field:
     f1, f2, f3 = st.columns(3)
-    lines = [("Back", "🔵 BACKS", f1), ("Mid", "🟢 MIDFIELD", f2), ("Forward", "🟠 FORWARDS", f3)]
+    lines = [("Back", "🔵 BACKS", f1), ("Mid", "🟢 MIDS", f2), ("Forward", "🟠 FWDS", f3)]
     
     for line_key, label, col in lines:
         with col:
-            st.subheader(label)
-            players_on = df[(df['Line'] == line_key) & (df['Group'] != current_off_group)]
+            st.markdown(f"**{label}**")
+            players_on = df_active[(df_active['Line'].str.contains(line_key)) & (df_active['Group'] != current_off_group)]
             for _, p in players_on.iterrows():
-                st.info(f"**{p['Name']}** `G{p['Group']}`")
+                st.success(f"**{p['Name']}** `G{p['Group']}`")
 
 with col_bench:
-    st.subheader("🪑 CURRENT BENCH")
-    bench = df[df['Group'] == current_off_group]
+    st.markdown("**🪑 CURRENT BENCH**")
+    bench = df_active[df_active['Group'] == current_off_group]
+    if bench.empty:
+        st.write("No one resting")
     for _, p in bench.iterrows():
         st.error(f"**OFF: {p['Name']}**")
     
-    st.divider()
-    st.subheader("🚨 UPCOMING SUBS")
-    st.write("Warn these players they are OFF next:")
-    upcoming = df[df['Group'] == next_off_group]
+    st.markdown("---")
+    st.markdown("**🚨 UPCOMING SUBS**")
+    upcoming = df_active[df_active['Group'] == next_off_group]
     for _, p in upcoming.iterrows():
-        st.write(f"👉 **{p['Name']}** ({p['Line']})")
+        st.warning(f"👉 **{p['Name']}** ({p['Line']})")
