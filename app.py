@@ -31,69 +31,67 @@ if 'line_plan' not in st.session_state:
         4: {"A": "Back", "B": "Mid", "C": "Forward"}
     }
 
-# --- SIDEBAR: WHITEBOARD SETUP ---
+# --- SIDEBAR: WHITEBOARD & SQUAD SETUP ---
 with st.sidebar:
     st.header("📋 Whiteboard Setup")
     
-    # NEW: Selection for who starts on the bench
+    # MANUAL START SELECTOR
     st.subheader("🏁 Starting Bench")
     starting_group = st.pills("Which group starts OFF?", [1, 2, 3, 4, 5], default=1)
     
-    with st.expander("🔄 Tactical Line Plan (Units)"):
+    with st.expander("🔄 Tactical Line Plan"):
         for q in [1, 2, 3, 4]:
             st.write(f"**Quarter {q} Plan**")
             c1, c2, c3 = st.columns(3)
-            st.session_state.line_plan[q]["A"] = c1.selectbox(f"Unit A", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["A"]), key=f"pa_{q}")
-            st.session_state.line_plan[q]["B"] = c2.selectbox(f"Unit B", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["B"]), key=f"pb_{q}")
-            st.session_state.line_plan[q]["C"] = c3.selectbox(f"Unit C", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["C"]), key=f"pc_{q}")
+            st.session_state.line_plan[q]["A"] = c1.selectbox(f"A", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["A"]), key=f"pla_{q}")
+            st.session_state.line_plan[q]["B"] = c2.selectbox(f"B", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["B"]), key=f"plb_{q}")
+            st.session_state.line_plan[q]["C"] = c3.selectbox(f"C", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["C"]), key=f"plc_{q}")
 
-    st.header("👥 Squad Attendance")
+    st.header("👥 Squad & Units")
     for i, p in enumerate(st.session_state.players):
         with st.expander(f"{p['Name']} (Unit {p['Unit']} - G{p['Group']})"):
             p['Name'] = st.text_input("Name", value=p['Name'], key=f"un_{i}")
+            p['Unit'] = st.selectbox("Unit", ["A", "B", "C"], index=["A", "B", "C"].index(p['Unit']), key=f"u_sel_{i}")
+            p['Group'] = st.selectbox("Group #", [1, 2, 3, 4, 5], index=p['Group']-1, key=f"g_sel_{i}")
             p['Active'] = st.checkbox("Active", value=p['Active'], key=f"a_sel_{i}")
 
 # --- MAIN DASHBOARD ---
 st.title("🏉 AFL Rotation Elite")
 
-# UX IMPROVEMENT: Reset rotation to 'Start' whenever Quarter button is clicked
+# Auto-reset logic for Quarter Changes
 if "prev_q" not in st.session_state:
     st.session_state.prev_q = 1
 
 q_selected = st.pills("Current Quarter", [1, 2, 3, 4], default=1)
 
-# Logic to force "Start" on Quarter Change
 if q_selected != st.session_state.prev_q:
-    st.session_state.current_timing = "Quarter Start"
     st.session_state.prev_q = q_selected
     st.rerun()
 
 phase_toggle = st.pills("Rotation Phase", ["Quarter Start", "Mid-Quarter Rotation"], default="Quarter Start")
 
-# --- ROTATION ENGINE ---
-# Calculate Phase (1-8)
+# --- ENGINE ---
 phase_num = ((q_selected - 1) * 2) + (1 if phase_toggle == "Quarter Start" else 2)
-
-# Sequence Logic adjusted for the starting group
 group_sequence = [1, 2, 3, 4, 5, 1, 2, 3]
-# Offset based on starting group (e.g., if start is 3, first index is group 3)
 start_offset = starting_group - 1
 current_off_idx = group_sequence[(phase_num - 1 + start_offset) % 5]
 next_off_idx = group_sequence[(phase_num + start_offset) % 5]
 
-# Update Positions based on Quarter Plan
+# Update Current Lines
 for p in st.session_state.players:
     p['CurrentLine'] = st.session_state.line_plan[q_selected][p['Unit']]
 
 df = pd.DataFrame(st.session_state.players)
 df_active = df[df['Active'] == True]
 
-# --- FIELD & BENCH VIEW ---
+st.divider()
+
+# --- FIELD VIEW ---
 col_field, col_bench = st.columns([2.5, 1.5])
 
 with col_field:
     f1, f2, f3 = st.columns(3)
-    lines = [("Back", "🔵 BACKS", f1), ("Mid", "🟢 MIDFIELD", f2), ("Forward", "🟠 FORWARDS", f3)]
+    lines = [("Back", "🔵 BACKS", f1), ("Mid", "🟢 MIDS", f2), ("Forward", "🟠 FWDS", f3)]
     
     for line_key, label, col in lines:
         with col:
@@ -110,7 +108,6 @@ with col_bench:
 
     st.divider()
     st.subheader("🚨 UPCOMING SWAP")
-    
     upcoming_off = df_active[df_active['Group'] == next_off_idx]
     upcoming_on = df_active[df_active['Group'] == current_off_idx]
     
@@ -118,4 +115,3 @@ with col_bench:
         on_p = upcoming_on[upcoming_on['Unit'] == off_p['Unit']]
         on_name = on_p['Name'].iloc[0] if not on_p.empty else "No Sub"
         st.warning(f"**{off_p['Name']}** (Off) ↔ **{on_name}** (On)")
-        st.caption(f"Position: {off_p['CurrentLine']}")
