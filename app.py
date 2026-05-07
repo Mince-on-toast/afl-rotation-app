@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
+import time
+from datetime import datetime, timedelta
 
-# 1. App Configuration & Title
-st.set_page_config(page_title="AFL Rotation Manager", layout="wide")
-st.title("🏉 AFL Junior 8-Rotation Manager")
+st.set_page_config(page_title="AFL Rotation Pro", layout="wide")
 
-# 2. Initial Squad Data (The Master Roster)
+# --- INITIAL SQUAD SETUP ---
 if 'players' not in st.session_state:
     st.session_state.players = [
         {"Name": "Joel", "Line": "Back", "Group": 1, "Active": True},
@@ -25,69 +25,79 @@ if 'players' not in st.session_state:
         {"Name": "Xavier", "Line": "Forward", "Group": 5, "Active": True},
     ]
 
-# 3. Sidebar: Management & Injuries
-st.sidebar.header("📋 Squad Management")
-for i, player in enumerate(st.session_state.players):
-    col1, col2 = st.sidebar.columns([3, 1])
-    col1.write(f"{player['Name']} ({player['Line'][0]})")
-    # Toggle to "Remove" player if injured or absent
-    player['Active'] = col2.checkbox("In", value=player['Active'], key=f"p_{i}")
+# --- TIMER LOGIC ---
+if 'start_time' not in st.session_state:
+    st.session_state.start_time = None
+if 'running' not in st.session_state:
+    st.session_state.running = False
 
-# 4. Main Dashboard Controls
-st.header("⏱ Game Controls")
-phase = st.select_slider("Current Rotation Phase", options=list(range(1, 9)), value=1)
+# --- SIDEBAR: POSITION EDITOR & SQUAD ---
+with st.sidebar:
+    st.header("📋 Lineup Editor")
+    st.write("Set positions before the game.")
+    for i, p in enumerate(st.session_state.players):
+        col1, col2, col3 = st.columns([2, 2, 1])
+        p['Name'] = col1.text_input(f"Name", value=p['Name'], key=f"name_{i}", label_visibility="collapsed")
+        p['Line'] = col2.selectbox(f"Line", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(p['Line']), key=f"line_{i}", label_visibility="collapsed")
+        p['Active'] = col3.checkbox("In", value=p['Active'], key=f"act_{i}")
 
-# Logic to map 1-8 phases to Group IDs (1,2,3,4,5, 1,2,3)
+# --- MAIN INTERFACE ---
+st.title("🏉 AFL Rotation Pro")
+
+# --- TIMER & QUARTER CONTROL ---
+t_col1, t_col2 = st.columns([2, 1])
+
+with t_col1:
+    q_selected = st.radio("Current Quarter", [1, 2, 3, 4], horizontal=True)
+    
+    # Simple Manual Rotation Phase Toggle (replacing slider)
+    phase_toggle = st.radio("Rotation Timing", ["Start (0-7.5m)", "Mid (7.5-15m)"], horizontal=True)
+    
+    # Calculate Phase (1-8)
+    phase = ((q_selected - 1) * 2) + (1 if phase_toggle == "Start (0-7.5m)" else 2)
+
+with t_col2:
+    st.metric("Current Rotation Phase", f"Phase {phase}")
+    st.caption(f"Target Sub: {'Start of Qtr' if phase_toggle == 'Start (0-7.5m)' else 'Mid-Quarter'}")
+
+st.divider()
+
+# --- ROTATION ENGINE ---
 mapping = {1:1, 2:2, 3:3, 4:4, 5:5, 6:1, 7:2, 8:3}
-next_mapping = {1:2, 2:3, 3:4, 4:5, 5:1, 6:2, 7:3, 8:4} # Preview of next bench
+next_mapping = {1:2, 2:3, 3:4, 4:5, 5:1, 6:2, 7:3, 8:4}
 
 current_group = mapping[phase]
 next_group = next_mapping[phase]
 
-# 5. The Field View (Filter Data)
 df = pd.DataFrame(st.session_state.players)
 df_active = df[df['Active'] == True]
 
-bench = df_active[df_active['Group'] == current_group]['Name'].tolist()
-on_deck = df_active[df_active['Group'] == next_group]['Name'].tolist()
-
-# Display Columns
+# --- FIELD VIEW ---
 col_field, col_bench = st.columns([3, 1])
 
 with col_field:
-    st.subheader("🏃 On the Field")
     f1, f2, f3 = st.columns(3)
     
-    with f1:
-        st.info("**BACKS**")
-        for p in df_active[(df_active['Line'] == 'Back') & (df_active['Group'] != current_group)]['Name']:
-            st.write(p)
-            
-    with f2:
-        st.success("**MIDFIELD**")
-        for p in df_active[(df_active['Line'] == 'Mid') & (df_active['Group'] != current_group)]['Name']:
-            st.write(p)
-            
-    with f3:
-        st.warning("**FORWARDS**")
-        for p in df_active[(df_active['Line'] == 'Forward') & (df_active['Group'] != current_group)]['Name']:
-            st.write(p)
+    lines = [("Back", "🔵 BACKS", f1), ("Mid", "🟢 MIDFIELD", f2), ("Forward", "🟠 FORWARDS", f3)]
+    
+    for line_key, label, col in lines:
+        with col:
+            st.subheader(label)
+            players_on = df_active[(df_active['Line'] == line_key) & (df_active['Group'] != current_group)]
+            for _, p in players_on.iterrows():
+                st.info(f"**{p['Name']}** `G{p['Group']}`")
 
 with col_bench:
     st.subheader("🪑 Bench")
-    for p in bench:
-        st.error(f"**OFF: {p}**")
+    bench = df_active[df_active['Group'] == current_group]
+    for _, p in bench.iterrows():
+        st.error(f"**OFF: {p['Name']}**")
     
     st.divider()
     st.write("🕒 **On Deck (Next Up):**")
-    for p in on_deck:
-        st.write(f"- {p}")
+    on_deck = df_active[df_active['Group'] == next_group]
+    for _, p in on_deck.iterrows():
+        st.write(f"👉 {p['Name']} (Group {p['Group']})")
 
-# 6. Schedule Reference
-with st.expander("📅 View Full 8-Rotation Schedule"):
-    sched_data = {
-        "Phase": [1, 2, 3, 4, 5, 6, 7, 8],
-        "Timing": ["Q1 Start", "Q1 Mid", "Q2 Start", "Q2 Mid", "Q3 Start", "Q3 Mid", "Q4 Start", "Q4 Mid"],
-        "Resting Group": ["Group 1", "Group 2", "Group 3", "Group 4", "Group 5", "Group 1", "Group 2", "Group 3"]
-    }
-    st.table(pd.DataFrame(sched_data))
+# --- AUTO-REFRESH SCRIPT (Optional for Timer feel) ---
+st.caption("Instructions: At the 7.5 minute mark of the quarter, tap 'Mid (7.5-15m)' to cycle the players.")
