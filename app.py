@@ -1,27 +1,17 @@
 import streamlit as st
 import pandas as pd
+import random
 
 st.set_page_config(page_title="AFL Rotation Pro", layout="wide")
 
-# --- INITIAL SQUAD DATA ---
+# --- DATA INITIALIZATION ---
 if 'players' not in st.session_state:
-    st.session_state.players = [
-        {"Name": "Joel", "Unit": "A", "Grp": 1, "Active": True},
-        {"Name": "Eli", "Unit": "A", "Grp": 2, "Active": True},
-        {"Name": "Jagger", "Unit": "A", "Grp": 3, "Active": True},
-        {"Name": "Max", "Unit": "A", "Grp": 4, "Active": True},
-        {"Name": "Josh", "Unit": "A", "Grp": 5, "Active": True},
-        {"Name": "Carmelo", "Unit": "B", "Grp": 1, "Active": True},
-        {"Name": "Buddy", "Unit": "B", "Grp": 2, "Active": True},
-        {"Name": "Jaxon F", "Unit": "B", "Grp": 3, "Active": True},
-        {"Name": "Harry", "Unit": "B", "Grp": 4, "Active": True},
-        {"Name": "Tyler", "Unit": "B", "Grp": 5, "Active": True},
-        {"Name": "Michael", "Unit": "C", "Grp": 1, "Active": True},
-        {"Name": "Ernest", "Unit": "C", "Grp": 2, "Active": True},
-        {"Name": "Leyton", "Unit": "C", "Grp": 3, "Active": True},
-        {"Name": "Jaxon J", "Unit": "C", "Grp": 4, "Active": True},
-        {"Name": "Xavier", "Unit": "C", "Grp": 5, "Active": True},
-    ]
+    st.session_state.players = [{"Name": "", "Unit": "", "Grp": i%5+1, "Active": True} for i in range(15)]
+    # Default names for testing - user can overwrite
+    default_names = ["Joel", "Eli", "Jagger", "Max", "Josh", "Carmelo", "Buddy", "Jaxon F", "Harry", "Tyler", "Michael", "Ernest", "Leyton", "Jaxon J", "Xavier"]
+    for i in range(15):
+        st.session_state.players[i]["Name"] = default_names[i]
+        st.session_state.players[i]["Unit"] = "A" if i < 5 else ("B" if i < 10 else "C")
 
 if 'line_plan' not in st.session_state:
     st.session_state.line_plan = {
@@ -37,41 +27,62 @@ page = st.sidebar.radio("Navigation", ["📋 Setup Squad", "🖍 Whiteboard Plan
 # --- PAGE 1: SETUP SQUAD ---
 if page == "📋 Setup Squad":
     st.header("Step 1: Attendance")
-    for p in st.session_state.players:
+    for i, p in enumerate(st.session_state.players):
         col1, col2 = st.columns([3, 1])
-        p['Name'] = col1.text_input(f"Player", value=p['Name'], key=f"n_{p['Name']}")
-        p['Active'] = col2.checkbox("Playing", value=p['Active'], key=f"act_{p['Name']}")
+        p['Name'] = col1.text_input(f"Player {i+1}", value=p['Name'], key=f"n_{i}")
+        p['Active'] = col2.checkbox("Playing", value=p['Active'], key=f"act_{i}")
 
 # --- PAGE 2: WHITEBOARD PLAN ---
 elif page == "🖍 Whiteboard Plan":
     st.header("Step 2: Set the Board")
+    
+    # Starting Group Logic
     st.session_state.start_grp = st.pills("Which Group starts on the bench?", [1, 2, 3, 4, 5], default=1)
     
-    st.subheader("Quarterly Line Moves")
+    # Quarter Plan
+    st.subheader("Tactical Line Moves")
     for q in [1, 2, 3, 4]:
         with st.expander(f"Quarter {q} Plan"):
             c1, c2, c3 = st.columns(3)
-            st.session_state.line_plan[q]["A"] = c1.selectbox(f"Unit A", ["Back", "Mid", "Forward"], index=0, key=f"ca{q}")
-            st.session_state.line_plan[q]["B"] = c2.selectbox(f"Unit B", ["Back", "Mid", "Forward"], index=1, key=f"cb{q}")
-            st.session_state.line_plan[q]["C"] = c3.selectbox(f"Unit C", ["Back", "Mid", "Forward"], index=2, key=f"cc{q}")
+            st.session_state.line_plan[q]["A"] = c1.selectbox(f"Unit A (Defenders)", ["Back", "Mid", "Forward"], index=0, key=f"ca{q}")
+            st.session_state.line_plan[q]["B"] = c2.selectbox(f"Unit B (Midfielders)", ["Back", "Mid", "Forward"], index=1, key=f"cb{q}")
+            st.session_state.line_plan[q]["C"] = c3.selectbox(f"Unit C (Forwards)", ["Back", "Mid", "Forward"], index=2, key=f"cc{q}")
 
-    st.subheader("Assign Starting Positions")
-    for p in st.session_state.players:
-        if p['Active']:
-            with st.expander(f"Position {p['Name']}"):
-                # Coach thinks in positions, we map to Units A/B/C internally
-                pos = st.selectbox("Start Position", ["Back", "Mid", "Forward"], index=["A", "B", "C"].index(p['Unit']), key=f"p_{p['Name']}")
-                p['Unit'] = {"Back": "A", "Mid": "B", "Forward": "C"}[pos]
-                p['Grp'] = st.selectbox("Rotation Group", [1, 2, 3, 4, 5], index=p['Grp']-1, key=f"g_{p['Name']}")
+    st.divider()
+    st.subheader("Assign Positions & Groups")
+    
+    # Auto-Fill Option
+    if st.button("Shuffle Remaining Players"):
+        used_names = [p['Name'] for p in st.session_state.players if p['Name'] != ""]
+        # Logic to ensure 5 per unit
+        units = ["A"]*5 + ["B"]*5 + ["C"]*5
+        random.shuffle(units)
+        for i, p in enumerate(st.session_state.players):
+            if p['Name'] == "": p['Name'] = f"Player {i+1}"
+            p['Unit'] = units[i]
+        st.rerun()
+
+    # Layout by Unit for "Top Level" visibility
+    u_cols = st.columns(3)
+    unit_labels = {"A": "Unit A (Defensive Block)", "B": "Unit B (Midfield Block)", "C": "Unit C (Forward Block)"}
+    
+    for i, unit_id in enumerate(["A", "B", "C"]):
+        with u_cols[i]:
+            st.markdown(f"### {unit_labels[unit_id]}")
+            unit_players = [p for p in st.session_state.players if p['Unit'] == unit_id]
+            for p_idx, p in enumerate(st.session_state.players):
+                if p['Unit'] == unit_id:
+                    st.text_input(f"Name", value=p['Name'], key=f"pname_{p_idx}", label_visibility="collapsed")
+                    col_u, col_g = st.columns([1, 1])
+                    p['Unit'] = col_u.selectbox("Unit", ["A", "B", "C"], index=i, key=f"punit_{p_idx}", label_visibility="collapsed")
+                    p['Grp'] = col_g.selectbox("Grp", [1, 2, 3, 4, 5], index=p['Grp']-1, key=f"pgrp_{p_idx}", label_visibility="collapsed")
+                    st.markdown("---")
 
 # --- PAGE 3: LIVE OVAL ---
 elif page == "🏟 LIVE OVAL":
-    # AUTO-RESET LOGIC
     if "prev_q" not in st.session_state: st.session_state.prev_q = 1
-    
     q_selected = st.pills("Quarter", [1, 2, 3, 4], default=1)
     
-    # If Quarter changes, force Timing to 'Starting Rotation'
     if q_selected != st.session_state.prev_q:
         st.session_state.timing_choice = "Starting Rotation"
         st.session_state.prev_q = q_selected
@@ -92,9 +103,8 @@ elif page == "🏟 LIVE OVAL":
     df_active = pd.DataFrame(st.session_state.players)[lambda x: x['Active'] == True]
 
     # STYLED OVAL
-    st.markdown("""<style>.zone{border:2px solid #333; border-radius:15px; padding:10px; margin-bottom:10px; background:#f0f2f6; text-align:center;} .player{display:block; padding:5px; margin:2px; background:white; border-radius:5px; border-left:5px solid #1F4E78; font-weight:bold;}</style>""", unsafe_allow_html=True)
+    st.markdown("""<style>.zone{border:2px solid #333; border-radius:15px; padding:10px; margin-bottom:10px; background:#f0f2f6; text-align:center;} .player{display:block; padding:8px; margin:4px; background:white; border-radius:5px; border-left:8px solid #1F4E78; font-weight:bold; font-size:1.1em;}</style>""", unsafe_allow_html=True)
     
-    # Zone Layout
     for zone, color, label in [("Forward", "🟠", "FORWARDS"), ("Mid", "🟢", "MIDFIELD"), ("Back", "🔵", "BACKS")]:
         st.markdown(f"<div class='zone'>{color} <strong>{label}</strong></div>", unsafe_allow_html=True)
         z_players = df_active[(df_active['Zone'] == zone) & (df_active['Grp'] != off_grp)]
@@ -102,16 +112,15 @@ elif page == "🏟 LIVE OVAL":
             st.markdown(f"<div class='player'>{p['Name']} [G{p['Grp']}]</div>", unsafe_allow_html=True)
 
     st.divider()
-    # BENCH & SWAPS
-    col_off, col_next = st.columns(2)
-    with col_off:
+    c_off, c_next = st.columns(2)
+    with c_off:
         st.error("**OFF FIELD**")
         for _, p in df_active[df_active['Grp'] == off_grp].iterrows():
-            st.write(f"❌ {p['Name']} ({p['Zone']})")
-    with col_next:
+            st.write(f"❌ {p['Name']} ({p['Zone']} Sub)")
+    with c_next:
         st.warning("**UPCOMING SWAP**")
         upcoming_off = df_active[df_active['Grp'] == next_off_grp]
         for _, off_p in upcoming_off.iterrows():
             on_p = df_active[(df_active['Unit'] == off_p['Unit']) & (df_active['Grp'] == off_grp)]
             on_name = on_p['Name'].values[0] if not on_p.empty else "No Sub"
-            st.write(f"{off_p['Name']} ↔ {on_name}")
+            st.write(f"**{off_p['Name']}** ↔ **{on_name}**")
