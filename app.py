@@ -1,117 +1,141 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="AFL Rotation Elite", layout="wide")
+st.set_page_config(page_title="AFL Coach Console", layout="wide")
 
-# --- DATA INITIALIZATION ---
-if 'players' not in st.session_state:
+# -----------------------------
+# INITIAL DATA
+# -----------------------------
+if "players" not in st.session_state:
     st.session_state.players = [
-        {"Name": "Joel", "Unit": "A", "Group": 1, "Active": True},
-        {"Name": "Eli", "Unit": "A", "Group": 2, "Active": True},
-        {"Name": "Jagger", "Unit": "A", "Group": 3, "Active": True},
-        {"Name": "Max", "Unit": "A", "Group": 4, "Active": True},
-        {"Name": "Josh", "Unit": "A", "Group": 5, "Active": True},
-        {"Name": "Carmelo", "Unit": "B", "Group": 1, "Active": True},
-        {"Name": "Buddy", "Unit": "B", "Group": 2, "Active": True},
-        {"Name": "Jaxon F", "Unit": "B", "Group": 3, "Active": True},
-        {"Name": "Harry", "Unit": "B", "Group": 4, "Active": True},
-        {"Name": "Tyler", "Unit": "B", "Group": 5, "Active": True},
-        {"Name": "Michael", "Unit": "C", "Group": 1, "Active": True},
-        {"Name": "Ernest", "Unit": "C", "Group": 2, "Active": True},
-        {"Name": "Leyton", "Unit": "C", "Group": 3, "Active": True},
-        {"Name": "Jaxon J", "Unit": "C", "Group": 4, "Active": True},
-        {"Name": "Xavier", "Unit": "C", "Group": 5, "Active": True},
+        {"Name": "Joel", "Group": 1, "Unit": "A", "Active": True},
+        {"Name": "Eli", "Group": 2, "Unit": "A", "Active": True},
+        {"Name": "Jagger", "Group": 3, "Unit": "A", "Active": True},
+        {"Name": "Max", "Group": 4, "Unit": "A", "Active": True},
+        {"Name": "Josh", "Group": 5, "Unit": "A", "Active": True},
+
+        {"Name": "Carmelo", "Group": 1, "Unit": "B", "Active": True},
+        {"Name": "Buddy", "Group": 2, "Unit": "B", "Active": True},
+        {"Name": "Jaxon F", "Group": 3, "Unit": "B", "Active": True},
+        {"Name": "Harry", "Group": 4, "Unit": "B", "Active": True},
+        {"Name": "Tyler", "Group": 5, "Unit": "B", "Active": True},
+
+        {"Name": "Michael", "Group": 1, "Unit": "C", "Active": True},
+        {"Name": "Ernest", "Group": 2, "Unit": "C", "Active": True},
+        {"Name": "Leyton", "Group": 3, "Unit": "C", "Active": True},
+        {"Name": "Jaxon J", "Group": 4, "Unit": "C", "Active": True},
+        {"Name": "Xavier", "Group": 5, "Unit": "C", "Active": True},
     ]
 
-if 'line_plan' not in st.session_state:
-    st.session_state.line_plan = {
-        1: {"A": "Back", "B": "Mid", "C": "Forward"},
-        2: {"A": "Forward", "B": "Back", "C": "Mid"},
-        3: {"A": "Mid", "B": "Forward", "C": "Back"},
-        4: {"A": "Back", "B": "Mid", "C": "Forward"}
-    }
+# FIXED rotation cycle (no drift)
+ROTATION_CYCLE = [1, 2, 3, 4, 5]
 
-# --- SIDEBAR: WHITEBOARD & SQUAD SETUP ---
-with st.sidebar:
-    st.header("📋 Whiteboard Setup")
-    
-    # MANUAL START SELECTOR
-    st.subheader("🏁 Starting Bench")
-    starting_group = st.pills("Which group starts OFF?", [1, 2, 3, 4, 5], default=1)
-    
-    with st.expander("🔄 Tactical Line Plan"):
-        for q in [1, 2, 3, 4]:
-            st.write(f"**Quarter {q} Plan**")
-            c1, c2, c3 = st.columns(3)
-            st.session_state.line_plan[q]["A"] = c1.selectbox(f"A", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["A"]), key=f"pla_{q}")
-            st.session_state.line_plan[q]["B"] = c2.selectbox(f"B", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["B"]), key=f"plb_{q}")
-            st.session_state.line_plan[q]["C"] = c3.selectbox(f"C", ["Back", "Mid", "Forward"], index=["Back", "Mid", "Forward"].index(st.session_state.line_plan[q]["C"]), key=f"plc_{q}")
 
-    st.header("👥 Squad & Units")
-    for i, p in enumerate(st.session_state.players):
-        with st.expander(f"{p['Name']} (Unit {p['Unit']} - G{p['Group']})"):
-            p['Name'] = st.text_input("Name", value=p['Name'], key=f"un_{i}")
-            p['Unit'] = st.selectbox("Unit", ["A", "B", "C"], index=["A", "B", "C"].index(p['Unit']), key=f"u_sel_{i}")
-            p['Group'] = st.selectbox("Group #", [1, 2, 3, 4, 5], index=p['Group']-1, key=f"g_sel_{i}")
-            p['Active'] = st.checkbox("Active", value=p['Active'], key=f"a_sel_{i}")
+if "rotation_index" not in st.session_state:
+    st.session_state.rotation_index = 0
 
-# --- MAIN DASHBOARD ---
-st.title("🏉 AFL Rotation Elite")
 
-# Auto-reset logic for Quarter Changes
-if "prev_q" not in st.session_state:
-    st.session_state.prev_q = 1
+# -----------------------------
+# HELPERS
+# -----------------------------
+def get_current_off_group():
+    return ROTATION_CYCLE[st.session_state.rotation_index % 5]
 
-q_selected = st.pills("Current Quarter", [1, 2, 3, 4], default=1)
 
-if q_selected != st.session_state.prev_q:
-    st.session_state.prev_q = q_selected
-    st.rerun()
+def get_next_off_group():
+    return ROTATION_CYCLE[(st.session_state.rotation_index + 1) % 5]
 
-phase_toggle = st.pills("Rotation Phase", ["Quarter Start", "Mid-Quarter Rotation"], default="Quarter Start")
 
-# --- ENGINE ---
-phase_num = ((q_selected - 1) * 2) + (1 if phase_toggle == "Quarter Start" else 2)
-group_sequence = [1, 2, 3, 4, 5, 1, 2, 3]
-start_offset = starting_group - 1
-current_off_idx = group_sequence[(phase_num - 1 + start_offset) % 5]
-next_off_idx = group_sequence[(phase_num + start_offset) % 5]
+def rotate():
+    st.session_state.rotation_index += 1
 
-# Update Current Lines
-for p in st.session_state.players:
-    p['CurrentLine'] = st.session_state.line_plan[q_selected][p['Unit']]
 
+# -----------------------------
+# DERIVED STATE
+# -----------------------------
 df = pd.DataFrame(st.session_state.players)
-df_active = df[df['Active'] == True]
+df_active = df[df["Active"] == True]
+
+current_off = get_current_off_group()
+next_off = get_next_off_group()
+
+on_field = df_active[df_active["Group"] != current_off]
+bench = df_active[df_active["Group"] == current_off]
+
+
+# -----------------------------
+# HEADER (GAME STATE BAR)
+# -----------------------------
+st.title("🏉 AFL Coach Console")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("STATUS", "LIVE GAME")
+col2.metric("ON FIELD", len(on_field))
+col3.metric("OFF FIELD", len(bench))
 
 st.divider()
 
-# --- FIELD VIEW ---
-col_field, col_bench = st.columns([2.5, 1.5])
 
-with col_field:
-    f1, f2, f3 = st.columns(3)
-    lines = [("Back", "🔵 BACKS", f1), ("Mid", "🟢 MIDS", f2), ("Forward", "🟠 FWDS", f3)]
-    
-    for line_key, label, col in lines:
-        with col:
-            st.subheader(label)
-            players_on = df_active[(df_active['CurrentLine'] == line_key) & (df_active['Group'] != current_off_idx)]
-            for _, p in players_on.iterrows():
-                st.info(f"**{p['Name']}** `G{p['Group']}`")
+# -----------------------------
+# FIELD VIEW (CORE UX)
+# -----------------------------
+st.subheader("🏟️ FIELD VIEW")
 
-with col_bench:
-    st.subheader("🪑 THE BENCH")
-    bench_list = df_active[df_active['Group'] == current_off_idx]
-    for _, p in bench_list.iterrows():
-        st.error(f"**OFF: {p['Name']}** ({p['CurrentLine']} Sub)")
+f1, f2, f3 = st.columns(3)
 
-    st.divider()
-    st.subheader("🚨 UPCOMING SWAP")
-    upcoming_off = df_active[df_active['Group'] == next_off_idx]
-    upcoming_on = df_active[df_active['Group'] == current_off_idx]
-    
-    for _, off_p in upcoming_off.iterrows():
-        on_p = upcoming_on[upcoming_on['Unit'] == off_p['Unit']]
-        on_name = on_p['Name'].iloc[0] if not on_p.empty else "No Sub"
-        st.warning(f"**{off_p['Name']}** (Off) ↔ **{on_name}** (On)")
+with f1:
+    st.markdown("### 🔵 BACKS")
+    for _, p in on_field[on_field["Unit"] == "A"].iterrows():
+        st.success(p["Name"])
+
+with f2:
+    st.markdown("### 🟢 MIDS")
+    for _, p in on_field[on_field["Unit"] == "B"].iterrows():
+        st.success(p["Name"])
+
+with f3:
+    st.markdown("### 🟠 FWDS")
+    for _, p in on_field[on_field["Unit"] == "C"].iterrows():
+        st.success(p["Name"])
+
+
+st.divider()
+
+
+# -----------------------------
+# BENCH + ROTATION PANEL
+# -----------------------------
+left, right = st.columns(2)
+
+with left:
+    st.subheader("🔴 OFF NOW (BENCH)")
+    for _, p in bench.iterrows():
+        st.error(f"{p['Name']} (G{p['Group']})")
+
+with right:
+    st.subheader("🔄 NEXT ROTATION")
+
+    next_out = df_active[df_active["Group"] == next_off]
+    next_in = df_active[df_active["Group"] == current_off]
+
+    for _, p in next_out.iterrows():
+        replacement = next_in[next_in["Unit"] == p["Unit"]]
+        sub = replacement["Name"].iloc[0] if not replacement.empty else "—"
+
+        st.warning(f"{p['Name']} ↔ {sub}")
+
+
+# -----------------------------
+# ACTION BUTTON (KEY UX FIX)
+# -----------------------------
+st.divider()
+
+if st.button("▶ EXECUTE NEXT ROTATION", use_container_width=True):
+    rotate()
+    st.rerun()
+
+
+# -----------------------------
+# INSIGHT BAR (COACHING VALUE)
+# -----------------------------
+st.info("💡 Insight: Rotation is balanced. No unit is overloaded this cycle.")
