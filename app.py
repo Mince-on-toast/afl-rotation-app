@@ -1,90 +1,356 @@
 import streamlit as st
-import time
 import pandas as pd
-from datetime import datetime
 
-# --- CONFIG & SESSION STATE ---
-st.set_page_config(layout="centered", page_title="AFL Game Day Manager")
+# -------------------------------------------------
+# PAGE CONFIG
+# -------------------------------------------------
+st.set_page_config(page_title="AFL Rotation Pro", layout="wide")
 
-if 'game_active' not in st.session_state:
-    st.session_state.game_active = False
-    st.session_state.start_time = 0
-    st.session_state.time_remaining = 900  # 15 mins in seconds
-    st.session_state.score = {"RMF": {"G": 0, "B": 0}, "OPPO": {"G": 0, "B": 0}}
-    st.session_state.log = []
-    # Mock Data for Initial Setup
-    st.session_state.players = {
-        "Back": ["A. Hardwich", "Q. Tran", "P. Nair", "T. Chan"],
-        "Mid": ["K. Williams", "B. Carter", "F. Rahman", "D. Russo"],
-        "Fwd": ["P. Garner", "L. Wilson", "N. Nguyen", "P. Kyriacou"],
-        "Bench": ["H. Moore", "N. Gianno", "L. Moore"]
+# -------------------------------------------------
+# SESSION STATE SETUP
+# -------------------------------------------------
+if "squad" not in st.session_state:
+    st.session_state.squad = [
+        "Joel", "Eli", "Jagger", "Max", "Josh",
+        "Carmelo", "Buddy", "Jaxon F", "Harry", "Tyler",
+        "Michael", "Ernest", "Leyton", "Jaxon J", "Xavier"
+    ]
+
+if "assignments" not in st.session_state:
+    st.session_state.assignments = (
+        [{"Name": "Select Player...", "Unit": "A", "Group": i % 5 + 1} for i in range(5)] +
+        [{"Name": "Select Player...", "Unit": "B", "Group": i % 5 + 1} for i in range(5)] +
+        [{"Name": "Select Player...", "Unit": "C", "Group": i % 5 + 1} for i in range(5)]
+    )
+
+if "line_plan" not in st.session_state:
+    st.session_state.line_plan = {
+        1: {"A": "Back", "B": "Mid", "C": "Forward"},
+        2: {"A": "Forward", "B": "Back", "C": "Mid"},
+        3: {"A": "Mid", "B": "Forward", "C": "Back"},
+        4: {"A": "Back", "B": "Mid", "C": "Forward"},
     }
 
-# --- STYLING ---
-st.markdown("""
+if "start_grp" not in st.session_state:
+    st.session_state.start_grp = 1
+
+if "prev_q" not in st.session_state:
+    st.session_state.prev_q = 1
+
+if "timing_choice" not in st.session_state:
+    st.session_state.timing_choice = "Starting Rotation"
+
+# -------------------------------------------------
+# SIDEBAR NAVIGATION
+# -------------------------------------------------
+page = st.sidebar.radio(
+    "Navigation",
+    ["📋 Setup Squad", "🖍 Whiteboard Plan", "🏟 LIVE OVAL"]
+)
+
+# -------------------------------------------------
+# PAGE 1 — SETUP SQUAD
+# -------------------------------------------------
+if page == "📋 Setup Squad":
+
+    st.header("Step 1: Squad Names")
+
+    for i in range(15):
+        st.session_state.squad[i] = st.text_input(
+            f"Player {i+1}",
+            value=st.session_state.squad[i],
+            key=f"squad_{i}"
+        )
+
+# -------------------------------------------------
+# PAGE 2 — WHITEBOARD PLAN
+# -------------------------------------------------
+elif page == "🖍 Whiteboard Plan":
+
+    st.header("Step 2: Set the Tone")
+
+    st.session_state.start_grp = st.radio(
+        "Which Group starts on the bench?",
+        [1, 2, 3, 4, 5],
+        horizontal=True,
+        index=0
+    )
+
+    # -------------------------------------------------
+    # STYLES
+    # -------------------------------------------------
+    st.markdown("""
     <style>
-    .player-card { border: 2px solid #3498db; border-radius: 8px; padding: 10px; text-align: center; background: white; margin: 5px; }
-    .bench-card { border: 2px dashed #95a5a6; border-radius: 8px; padding: 10px; background: #ecf0f1; margin: 5px; }
-    .swap-arrow { font-size: 20px; color: #e67e22; font-weight: bold; }
+    .unit-box {
+        border: 3px solid #333;
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+
+    .back-box {
+        border-color: #1565C0;
+        background-color: #E3F2FD;
+    }
+
+    .mid-box {
+        border-color: #2E7D32;
+        background-color: #E8F5E9;
+    }
+
+    .fwd-box {
+        border-color: #EF6C00;
+        background-color: #FFF3E0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNCTIONS ---
-def update_score(team, type, val):
-    st.session_state.score[team][type] += val
-    st.session_state.log.append(f"{type} added for {team}")
+    cols = st.columns(3)
 
-def undo_score():
-    if st.session_state.log:
-        last_action = st.session_state.log.pop()
-        # Logic to decrement score based on log string...
-        st.toast(f"Undone: {last_action}")
+    unit_data = [
+        ("A", "Unit A (Backline)", "back-box"),
+        ("B", "Unit B (Midfield)", "mid-box"),
+        ("C", "Unit C (Forward Line)", "fwd-box")
+    ]
 
-# --- HEADER & CLOCK ---
-col1, col2, col3 = st.columns([1,2,1])
-with col2:
-    st.title("⏱️ 15:00") # Logic for countdown timer would go here
-    st.subheader(f"RMF: {st.session_state.score['RMF']['G']}.{st.session_state.score['RMF']['B']} ({st.session_state.score['RMF']['G']*6 + st.session_state.score['RMF']['B']})")
+    for col, (unit_id, label, css_class) in zip(cols, unit_data):
 
-# --- SCORE CONTROLS ---
-with st.expander("Score Correction / Entry"):
-    c1, c2 = st.columns(2)
-    with c1:
-        st.button("+6 RMF", on_click=update_score, args=("RMF", "G", 1))
-        st.button("+1 RMF", on_click=update_score, args=("RMF", "B", 1))
-    with c2:
-        st.button("+6 OPPO", on_click=update_score, args=("OPPO", "G", 1))
-        st.button("+1 OPPO", on_click=update_score, args=("OPPO", "B", 1))
-    st.button("Undo Last Action", on_click=undo_score)
+        with col:
 
-# --- THE FIELD (12-MAN GRID) ---
-st.divider()
-st.markdown("### 🏟️ THE FIELD")
+            st.markdown(
+                f"""
+                <div class="unit-box {css_class}">
+                <h3>{label}</h3>
+                """,
+                unsafe_allow_html=True
+            )
 
-for zone in ["Fwd", "Mid", "Back"]:
-    st.caption(f"--- {zone.upper()} ---")
-    cols = st.columns(4)
-    for i, player in enumerate(st.session_state.players[zone]):
-        with cols[i]:
-            st.markdown(f"<div class='player-card'>{player}</div>", unsafe_allow_html=True)
+            for i in range(len(st.session_state.assignments)):
 
-# --- THE ROTATION "STAGE" ---
-st.divider()
-st.markdown("### 🔄 PLANNED ROTATION (Due @ 7:30)")
+                assignment = st.session_state.assignments[i]
 
-# This pair shows the Bench kid and who they are slated to replace
-r1, r2, r3 = st.columns(3)
-with r1:
-    st.markdown(f"<div class='bench-card'><b>{st.session_state.players['Bench'][0]}</b><div class='swap-arrow'>↓</div>{st.session_state.players['Back'][0]}</div>", unsafe_allow_html=True)
-with r2:
-    st.markdown(f"<div class='bench-card'><b>{st.session_state.players['Bench'][1]}</b><div class='swap-arrow'>↓</div>{st.session_state.players['Mid'][0]}</div>", unsafe_allow_html=True)
-with r3:
-    st.markdown(f"<div class='bench-card'><b>{st.session_state.players['Bench'][2]}</b><div class='swap-arrow'>↓</div>{st.session_state.players['Fwd'][0]}</div>", unsafe_allow_html=True)
+                if assignment["Unit"] == unit_id:
 
-if st.button("COMMIT ALL ROTATIONS", use_container_width=True, type="primary"):
-    # Swap Logic here
-    st.success("Rotations Executed & Logged!")
+                    options = ["Select Player..."] + sorted(st.session_state.squad)
 
-# --- EXPORT ---
-if st.button("End Game & Export Stats"):
-    st.write("Generating CSV...")
+                    current_name = assignment["Name"]
+
+                    current_index = (
+                        options.index(current_name)
+                        if current_name in options
+                        else 0
+                    )
+
+                    selected = st.selectbox(
+                        f"Group {assignment['Group']}",
+                        options,
+                        index=current_index,
+                        key=f"player_select_{i}"
+                    )
+
+                    st.session_state.assignments[i]["Name"] = selected
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # -------------------------------------------------
+    # DUPLICATE CHECK
+    # -------------------------------------------------
+    selected_players = [
+        p["Name"]
+        for p in st.session_state.assignments
+        if p["Name"] != "Select Player..."
+    ]
+
+    duplicates = sorted(
+        set(
+            name
+            for name in selected_players
+            if selected_players.count(name) > 1
+        )
+    )
+
+    if duplicates:
+        st.error(f"Duplicate players selected: {', '.join(duplicates)}")
+    else:
+        st.success("No duplicate players detected.")
+
+    # -------------------------------------------------
+    # TACTICAL PLAN
+    # -------------------------------------------------
+    with st.expander("🔄 Tactical Line Moves (By Unit)", expanded=True):
+
+        zones = ["Back", "Mid", "Forward"]
+
+        for q in [1, 2, 3, 4]:
+
+            st.subheader(f"Quarter {q}")
+
+            c1, c2, c3 = st.columns(3)
+
+            st.session_state.line_plan[q]["A"] = c1.selectbox(
+                f"Unit A",
+                zones,
+                index=zones.index(st.session_state.line_plan[q]["A"]),
+                key=f"qa_{q}"
+            )
+
+            st.session_state.line_plan[q]["B"] = c2.selectbox(
+                f"Unit B",
+                zones,
+                index=zones.index(st.session_state.line_plan[q]["B"]),
+                key=f"qb_{q}"
+            )
+
+            st.session_state.line_plan[q]["C"] = c3.selectbox(
+                f"Unit C",
+                zones,
+                index=zones.index(st.session_state.line_plan[q]["C"]),
+                key=f"qc_{q}"
+            )
+
+# -------------------------------------------------
+# PAGE 3 — LIVE OVAL
+# -------------------------------------------------
+elif page == "🏟 LIVE OVAL":
+
+    st.header("LIVE GAME VIEW")
+
+    quarter = st.radio(
+        "Quarter",
+        [1, 2, 3, 4],
+        horizontal=True,
+        index=0
+    )
+
+    # Reset timing if quarter changes
+    if quarter != st.session_state.prev_q:
+        st.session_state.timing_choice = "Starting Rotation"
+        st.session_state.prev_q = quarter
+        st.rerun()
+
+    timing = st.radio(
+        "Rotation Timing",
+        ["Starting Rotation", "Mid-Quarter Rotation"],
+        horizontal=True,
+        key="timing_choice"
+    )
+
+    # -------------------------------------------------
+    # ROTATION LOGIC
+    # -------------------------------------------------
+    phase = ((quarter - 1) * 2) + (
+        1 if timing == "Starting Rotation" else 2
+    )
+
+    start_offset = st.session_state.start_grp - 1
+
+    group_sequence = [1, 2, 3, 4, 5, 1, 2, 3]
+
+    off_group = group_sequence[(phase - 1 + start_offset) % 5]
+
+    next_off_group = group_sequence[(phase + start_offset) % 5]
+
+    # -------------------------------------------------
+    # DATAFRAME
+    # -------------------------------------------------
+    df = pd.DataFrame(st.session_state.assignments)
+
+    df["Zone"] = df["Unit"].map(
+        lambda u: st.session_state.line_plan[quarter][u]
+    )
+
+    df_ready = df[df["Name"] != "Select Player..."]
+
+    # -------------------------------------------------
+    # OVAL STYLES
+    # -------------------------------------------------
+    st.markdown("""
+    <style>
+
+    .zone {
+        border: 2px solid #333;
+        border-radius: 15px;
+        padding: 10px;
+        margin-bottom: 10px;
+        background: #f0f2f6;
+        text-align: center;
+    }
+
+    .player {
+        display: block;
+        padding: 8px;
+        margin: 4px;
+        background: white;
+        border-radius: 5px;
+        border-left: 8px solid #1F4E78;
+        font-weight: bold;
+        font-size: 1.05em;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+    # -------------------------------------------------
+    # DISPLAY ZONES
+    # -------------------------------------------------
+    zone_layout = [
+        ("Forward", "🟠", "FORWARDS"),
+        ("Mid", "🟢", "MIDFIELD"),
+        ("Back", "🔵", "BACKS")
+    ]
+
+    for zone, emoji, label in zone_layout:
+
+        st.markdown(
+            f"<div class='zone'>{emoji} <strong>{label}</strong></div>",
+            unsafe_allow_html=True
+        )
+
+        zone_players = df_ready[
+            (df_ready["Zone"] == zone) &
+            (df_ready["Group"] != off_group)
+        ]
+
+        for _, player in zone_players.iterrows():
+
+            st.markdown(
+                f"<div class='player'>{player['Name']} [G{player['Group']}]</div>",
+                unsafe_allow_html=True
+            )
+
+    # -------------------------------------------------
+    # BENCH + UPCOMING SWAPS
+    # -------------------------------------------------
+    st.divider()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.error("OFF FIELD")
+
+        off_players = df_ready[df_ready["Group"] == off_group]
+
+        for _, p in off_players.iterrows():
+            st.write(f"❌ {p['Name']} ({p['Zone']})")
+
+    with col2:
+
+        st.warning("UPCOMING SWAP")
+
+        upcoming = df_ready[df_ready["Group"] == next_off_group]
+
+        for _, off_p in upcoming.iterrows():
+
+            on_p = df_ready[
+                (df_ready["Unit"] == off_p["Unit"]) &
+                (df_ready["Group"] == off_group)
+            ]
+
+            on_name = (
+                on_p["Name"].values[0]
+                if not on_p.empty
+                else "No Sub"
+            )
+
+            st.write(f"**{off_p['Name']}** ↔ **{on_name}**")
